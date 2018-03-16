@@ -13,7 +13,7 @@ import { Sparklines, SparklinesLine } from 'react-sparklines'
 import { REST_API_PREFIX } from '../constants/Constants'
 
 import {  getLrnResult, getlookupResults } from '../actions/CdrConferenceActions'
-import Lookup from './LookupComponents/Lookup'
+
 
 class ExpandedCDRComponent extends React.Component {
 	constructor( props ) {
@@ -38,12 +38,7 @@ class ExpandedCDRComponent extends React.Component {
         this.removeLRNitem = this.removeLRNitem.bind(this);
 	}
 
-	shouldComponentUpdate(nextProps, nextState){
-	    console.log(this.state !== nextState);
-	    return this.state.lookupList === nextState.lookupList;
-    }
-
-    getLRNData(callerNumber){
+    getLRNData(callerId, callerNumber){
         let LRNurl = `http://ossui.star2star.net/oss-ui/rest/lrn/${callerNumber}`;
 
         this.setState({ lrnRequestState: true });
@@ -51,13 +46,13 @@ class ExpandedCDRComponent extends React.Component {
         axios.get(LRNurl).then( response => {
                 this.setState({lrnRequestState: false, lrnList: []});
 
-                this.addNewLRNitem(response.data, callerNumber);
+                this.addNewLRNitem(response.data, callerId, callerNumber);
             }).catch( error => {
                alert(error);
             });
     }
 
-    lrnRequest(callerNumber){
+    lrnRequest(callerId, callerNumber){
         let callerCurrentNumber;
         let phoneNumber = callerNumber.indexOf('+') !== -1 ? callerNumber.replace(/\s/g,'').substring(1, callerNumber.length) 
                                                          : callerNumber.replace(/\s/g,'');
@@ -72,22 +67,21 @@ class ExpandedCDRComponent extends React.Component {
         }
 
         if(callerCurrentNumber !== null){
-            this.getLRNData(callerCurrentNumber);
+            this.getLRNData(callerId, callerCurrentNumber);
         }
     }
 
-    getLookupData(ip){
-        console.log('getLookupData');
+    getLookupData(ip, callerId){
         this.props.dispatch(getlookupResults(ip)).then(responce => {
             if(responce.error){
                 alert(responce.payload);
             }else{
-                this.addNewLookup(responce, ip);
+                this.addNewLookup(responce, ip, callerId);
             }
         });
     }
 
-    addNewLRNitem(lrnData, callerNumber){
+    addNewLRNitem(lrnData, callerId, callerNumber){
         let newId = '',
         possibleCharacters = 'ABCDEFGHIJKLMNOPQRSTYUVWXYZabcdefghigklmnopqrstuvwxyz0123456789',
         lrnList = this.state.lrnList,
@@ -99,6 +93,7 @@ class ExpandedCDRComponent extends React.Component {
 
         lrnList.push({
             id: newId,
+            callerId: callerId,
             callerNumber: callerNumber,
             lrnData: lrnData,
         });
@@ -114,8 +109,7 @@ class ExpandedCDRComponent extends React.Component {
         this.setState({lrnList: lrnList});
     }
 
-    addNewLookup(lookupData, ip){
-        console.log('addNewLookup');
+    addNewLookup(lookupData, ip, callerId){
         let newId = '',
         possibleCharacters = 'ABCDEFGHIJKLMNOPQRSTYUVWXYZabcdefghigklmnopqrstuvwxyz0123456789',
         lookupList = this.state.lookupList,
@@ -125,6 +119,7 @@ class ExpandedCDRComponent extends React.Component {
             newId += possibleCharacters.charAt(Math.floor(Math.random() * possibleCharacters.length));
         }
         lookupList.push({
+            callerId: callerId,
             id: newId,
             lookupIp: ip,
             lookupData: lookupData,
@@ -191,7 +186,6 @@ class ExpandedCDRComponent extends React.Component {
     }
 
     expandedConfComponent(tableData, rows){
-	    console.log('expandedConfComponent');
 	    return (
             <Col id={`cdr-details-${ rows.callId }`}>
                 <Row>
@@ -234,7 +228,7 @@ class ExpandedCDRComponent extends React.Component {
                                         <dl className='dl-horizontal'>
                                             <div>
                                                 <dt>Caller number:</dt>
-                                                <dd><span onClick={this.lrnRequest.bind(this, rows.callerId)} className="action-value">{ rows.callerId }</span></dd>
+                                                <dd><span onClick={this.lrnRequest.bind(this, rows.callId, rows.callerId)} className="action-value">{ rows.callerId }</span></dd>
                                             </div>
                                              <div>
                                                 <dt>Called Late:</dt>
@@ -284,11 +278,11 @@ class ExpandedCDRComponent extends React.Component {
                                         <dl className='dl-horizontal'>
                                             <div>
                                                 <dt>Local media:</dt>
-                                                <dd><span onClick={this.getLookupData.bind(this, rows.localMediaIp)} className="action-value">{ rows.localMediaIp }</span> :{ rows.localMediaPort }</dd>
+                                                <dd><span onClick={this.getLookupData.bind(this, rows.localMediaIp, rows.callerId)} className="action-value">{ rows.localMediaIp }</span> :{ rows.localMediaPort }</dd>
                                             </div>
                                             <div>
                                                 <dt>Remote media:</dt>
-                                                <dd><span onClick={this.getLookupData.bind(this, rows.remoteMediaIp)} className="action-value">{ rows.remoteMediaIp }</span>:{ rows.remoteMediaPort }</dd>
+                                                <dd><span onClick={this.getLookupData.bind(this, rows.remoteMediaIp, rows.callerId)} className="action-value">{ rows.remoteMediaIp }</span>:{ rows.remoteMediaPort }</dd>
                                             </div>
                                             <div>
                                                 <dt>MOS score:</dt>
@@ -372,7 +366,8 @@ class ExpandedCDRComponent extends React.Component {
                                 <div className=' spinner-block'>
                                     <FontAwesome className="fa-spin" name="spinner" />
                                 </div>
-                            </Panel> : this.state.lookupList.length > 0 ? this.renderLookup() : null }
+                                {console.log(this.state.lookupList)}
+                            </Panel> : (this.state.lookupList.length) ? this.renderLookup(rows.callerId) : null }
                     </Col>
                 </Row>
                 <Row>
@@ -382,7 +377,7 @@ class ExpandedCDRComponent extends React.Component {
                                 <div className=' spinner-block'>
                                     <FontAwesome className="fa-spin" name="spinner" />
                                 </div>
-                            </Panel> : this.state.lrnList.length > 0 ? this.renderLRN() : null }
+                            </Panel> : (this.state.lrnList.length) ? this.renderLRN(rows.callerId) : null }
                     </Col>
                 </Row>
                 <Row>
@@ -404,9 +399,8 @@ class ExpandedCDRComponent extends React.Component {
         )
     }
 
-    renderLookup(){
-        console.log('renderLookup');
-	    return this.state.lookupList.map(item =>{
+    renderLookup(callerId){
+	    return this.state.lookupList.filter(item=>(item.callerId === callerId)).map(item =>{
             let lookupData = item.lookupData.payload.net;
             let testResultPanelHeader = (
                 <div>
@@ -474,8 +468,8 @@ class ExpandedCDRComponent extends React.Component {
         });
     }
 
-    renderLRN(){
-        return this.state.lrnList.map(item =>{
+    renderLRN(callerId){
+        return this.state.lrnList.filter(item=>(item.callerId === callerId)).map(item =>{
             let lrnData = item.lrnData;
             let testResultPanelHeader = (
                 <div>
@@ -594,7 +588,7 @@ class ExpandedCDRComponent extends React.Component {
     }
 
     expandedComponent(rows){
-        console.log('expandedComponent');
+
         var tableExpandedOptions = {
             noDataText: this.renderWaitingScreenExpanded(),
             onRowClick: this.expandedConfController.bind(this),
